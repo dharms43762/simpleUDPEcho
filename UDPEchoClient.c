@@ -33,24 +33,21 @@ int main(int argc, char *argv[])
   int echoStringLen;               /* Length of string to echo */
   int respStringLen;               /* Length of received response */
   
-  if ((argc < 3) || (argc > 4))    /* Test for correct number of arguments */
+  if (argc < 4)    		   /* Test for correct number of arguments */
     {
-      fprintf(stderr,"Usage: %s <Server IP> <Echo Word> [<Echo Port>]\n", 
+      fprintf(stderr,"Usage: %s <Server IP> <Echo Port> <Echo String>\n", 
 	      argv[0]);
       exit(1);
     }
   
   servIP = argv[1];           /* First arg: server IP address (dotted quad) */
-  echoString = argv[2];       /* Second arg: string to echo */
+  echoString = argv[3];       /* Third arg: string to echo */
   
   if ((echoStringLen = strlen(echoString)) > ECHOMAX)  /* Check input length */
-    DieWithError("Echo word too long");
+    DieWithError("Echo string too long");
   
-  if (argc == 4)
-    echoServPort = atoi(argv[3]);  /* Use given port, if any */
-  else
-    echoServPort = 7;  /* 7 is the well-known port for the echo service */
-  
+  echoServPort = atoi(argv[2]);  /* Use specified port */
+ 
   /* Create a datagram/UDP socket */
   if ((sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
     DieWithError("socket() failed");
