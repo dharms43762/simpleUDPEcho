@@ -13,11 +13,30 @@
 #include <unistd.h>     /* for close() */
 
 #define ECHOMAX 255     /* Longest string to echo */
+#define DEFAULT_PORT 5555  /* default port, if none specified oncommand line */
 
+/* Print error message and exit */
 void DieWithError(char *errorMessage)
 {
   perror(errorMessage);
   exit(1);
+}
+
+/* Read a string from the keyboard.  Reading stops when a newline or eof is entered.
+   At most len-1 characters are read and placed in buf.  When eof is entered, NULL
+   is returned; otherwise buf is returned.
+*/ 
+char* readString (char *buf,int len){
+  char *s;
+  // read from stdin until newline or eof entered
+  while ((s=fgets(buf,len,stdin))==0 && !feof(stdin));
+  
+  // if eof not entered, remove newline from buffer
+  if( s != NULL )
+    s[strlen(s) - 1] = '\0';
+  
+  // return the string (or NULL if eof)
+  return s;
 }
 
 int main(int argc, char *argv[])
@@ -28,25 +47,24 @@ int main(int argc, char *argv[])
   unsigned short echoServPort;     /* Echo server port */
   unsigned int fromSize;           /* In-out of address size for recvfrom() */
   char *servIP;                    /* IP address of server */
-  char *echoString;                /* String to send to echo server */
+  char echoString[ECHOMAX+1];      /* string to send to echo server */
   char echoBuffer[ECHOMAX+1];      /* Buffer for receiving echoed string */
   int echoStringLen;               /* Length of string to echo */
   int respStringLen;               /* Length of received response */
   
-  if (argc < 4)    		   /* Test for correct number of arguments */
+  if (argc < 2 || argc > 3 )       /* Test for correct number of arguments */
     {
-      fprintf(stderr,"Usage: %s <Server IP> <Echo Port> <Echo String>\n", 
+      fprintf(stderr,"Usage: %s <Server IP> [<Echo Port>]\n", 
 	      argv[0]);
       exit(1);
     }
   
   servIP = argv[1];           /* First arg: server IP address (dotted quad) */
-  echoString = argv[3];       /* Third arg: string to echo */
   
-  if ((echoStringLen = strlen(echoString)) > ECHOMAX)  /* Check input length */
-    DieWithError("Echo string too long");
-  
-  echoServPort = atoi(argv[2]);  /* Use specified port */
+  if( argc == 3 )
+    echoServPort = atoi(argv[2]);  /* Use specified port */
+  else
+    echoServPort = DEFAULT_PORT;
  
   /* Create a datagram/UDP socket */
   if ((sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
@@ -58,28 +76,40 @@ int main(int argc, char *argv[])
   echoServAddr.sin_addr.s_addr = inet_addr(servIP);  /* Server IP address */
   echoServAddr.sin_port   = htons(echoServPort);     /* Server port */
   
-  /* Send the string to the server */
-  if (sendto(sock, echoString, echoStringLen, 0, 
-	     (struct sockaddr *) &echoServAddr, 
-	     sizeof(echoServAddr)) != echoStringLen)
-    DieWithError("sendto() sent a different number of bytes than expected");
+  // read strings and send them to the server until eof (^d) entered
+  printf("Enter strings to send to the echo server.  Terminate with ^d.\n");
+  while (readString(echoString,ECHOMAX) != NULL )
+  {
+    // calculate the length of the string
+    echoStringLen = strlen(echoString);
+    
+    /* Send the string to the server (including the nul character) */
+    if (sendto(sock, echoString, echoStringLen+1, 0, 
+	       (struct sockaddr *) &echoServAddr, 
+	       sizeof(echoServAddr)) != echoStringLen+1)
+      DieWithError("sendto() sent a different number of bytes than expected");
   
-  /* Recv a response */
-  fromSize = sizeof(fromAddr);
-  if ((respStringLen = recvfrom(sock, echoBuffer, ECHOMAX, 0, 
-				(struct sockaddr *) &fromAddr, 
-				&fromSize)) != echoStringLen)
-    DieWithError("recvfrom() failed");
+    /* Recv a response */
+    fromSize = sizeof(fromAddr);
+    if ((respStringLen = recvfrom(sock, echoBuffer, ECHOMAX, 0, 
+				  (struct sockaddr *) &fromAddr, 
+				  &fromSize)) != echoStringLen+1)
+      DieWithError("received message was not the expected size");
   
-  if (echoServAddr.sin_addr.s_addr != fromAddr.sin_addr.s_addr)
+    if (echoServAddr.sin_addr.s_addr != fromAddr.sin_addr.s_addr)
     {
       fprintf(stderr,"Error: received a packet from unknown source.\n");
       exit(1);
     }
   
-  /* null-terminate the received data */
-  echoBuffer[respStringLen] = '\0';
-  printf("Received: %s\n", echoBuffer);    /* Print the echoed arg */
+    printf("Received: %s\n", echoBuffer);    /* Print the echoed arg */
+  
+    /* check that the received string was the same as we sent */
+    for( int i=0; i<echoStringLen; i++ )
+      if( echoString[i] != echoBuffer[i] )
+        DieWithError( "echo'd string not what we expected" );
+    printf("Received string is correct\n");
+  }
   
   close(sock);
   exit(0);

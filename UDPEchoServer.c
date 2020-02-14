@@ -12,6 +12,7 @@
 #include <unistd.h>     /* for close() */
 
 #define ECHOMAX 255     /* Longest string to echo */
+#define DEFAULT_PORT 5555  /* default port, if none specified oncommand line */
 
 void DieWithError(char *errorMessage)
 {
@@ -29,13 +30,16 @@ int main(int argc, char *argv[])
   unsigned short echoServPort;     /* Server port */
   int recvMsgSize;                 /* Size of received message */
   
-  if (argc != 2)         /* Test for correct number of parameters */
+  if (argc > 2)         /* Test for correct number of parameters */
     {
-      fprintf(stderr,"Usage:  %s <UDP SERVER PORT>\n", argv[0]);
+      fprintf(stderr,"Usage:  %s [<UDP SERVER PORT>]\n", argv[0]);
       exit(1);
     }
   
-  echoServPort = atoi(argv[1]);  /* First arg:  local port */
+  if( argc == 2 )
+    echoServPort = atoi(argv[1]);  /* First arg:  local port */
+  else
+    echoServPort = DEFAULT_PORT;
   
   /* Create socket for sending/receiving datagrams */
   if ((sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
